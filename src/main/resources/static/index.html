@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileShare</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:           #f1f5f9;
+            --surface:      #ffffff;
+            --border:       #e2e8f0;
+            --primary:      #3b82f6;
+            --primary-dk:   #2563eb;
+            --danger:       #ef4444;
+            --danger-dk:    #dc2626;
+            --success:      #16a34a;
+            --text:         #0f172a;
+            --text-muted:   #64748b;
+            --shadow-sm:    0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.1);
+            --radius:       8px;
+            --radius-sm:    4px;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ── Header ─────────────────────────────────────────────────────── */
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: var(--shadow-sm);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        header h1      { font-size: 17px; font-weight: 700; color: var(--primary); }
+        header .badge  {
+            font-size: 11px; padding: 2px 8px;
+            background: rgba(59,130,246,.1); color: var(--primary);
+            border-radius: 20px; font-weight: 600;
+        }
+        header .stats  { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+
+        /* ── Layout ──────────────────────────────────────────────────────── */
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* ── Card ────────────────────────────────────────────────────────── */
+        .card            { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+        .card-header     { padding: 10px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; display: flex; align-items: center; justify-content: space-between; }
+        .card-header h2  { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); }
+        .card-body       { padding: 20px; }
+
+        /* ── Forms ───────────────────────────────────────────────────────── */
+        label        { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+        input[type="text"],
+        input[type="date"] {
+            width: 100%; padding: 7px 11px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            font-size: 13px; color: var(--text); background: var(--surface);
+            outline: none; transition: border-color .15s, box-shadow .15s;
+        }
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+        }
+        .form-grid { display: grid; gap: 12px; }
+        .cols-2    { grid-template-columns: 1fr 1fr; }
+
+        /* ── Buttons ─────────────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 7px 14px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: background .15s, transform .1s; white-space: nowrap;
+        }
+        .btn:active   { transform: scale(.97); }
+        .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+        .btn-primary { background: var(--primary);  color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-dk); }
+
+        .btn-danger  { background: var(--danger);   color: #fff; }
+        .btn-danger:hover:not(:disabled)  { background: var(--danger-dk); }
+
+        .btn-ghost   { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+        .btn-ghost:hover:not(:disabled)   { background: var(--bg); }
+
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        /* ── Drop zone ───────────────────────────────────────────────────── */
+        #drop-zone {
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 28px; text-align: center; cursor: pointer;
+            transition: border-color .2s, background .2s; color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        #drop-zone:hover, #drop-zone.over {
+            border-color: var(--primary); background: rgba(59,130,246,.04); color: var(--primary);
+        }
+        #drop-zone .icon  { font-size: 28px; margin-bottom: 6px; }
+        #drop-zone p      { font-size: 13px; margin-bottom: 2px; }
+        #drop-zone small  { font-size: 11px; }
+
+        /* ── File chips ──────────────────────────────────────────────────── */
+        #selected-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .file-chip {
+            display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+            background: rgba(59,130,246,.08); color: var(--primary-dk);
+            border-radius: 20px; font-size: 12px;
+        }
+
+        /* ── Tag builder ─────────────────────────────────────────────────── */
+        #tag-row     { display: flex; gap: 8px; align-items: flex-end; }
+        #tag-row > * { flex: 1; }
+        #tag-row .btn { flex: none; }
+        #pending-tags { display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; margin-bottom: 8px; }
+        .tag-chip {
+            display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px;
+            background: rgba(59,130,246,.1); color: var(--primary-dk);
+            border-radius: 20px; font-size: 11px; font-weight: 500;
+        }
+        .tag-chip .x { cursor: pointer; opacity: .55; line-height: 1; }
+        .tag-chip .x:hover { opacity: 1; }
+
+        /* ── Spinner ─────────────────────────────────────────────────────── */
+        .spinner {
+            display: inline-block; width: 13px; height: 13px;
+            border: 2px solid var(--border); border-top-color: var(--primary);
+            border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #upload-status { font-size: 12px; color: var(--text-muted); }
+
+        /* ── Search bar ──────────────────────────────────────────────────── */
+        #search-bar {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: 2fr 1fr 130px 130px auto auto;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        /* ── Table ───────────────────────────────────────────────────────── */
+        .tbl-wrap  { overflow-x: auto; }
+        table      { width: 100%; border-collapse: collapse; }
+        thead th   {
+            padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted);
+            background: #f8fafc; border-bottom: 1px solid var(--border); white-space: nowrap;
+        }
+        tbody tr   { border-bottom: 1px solid var(--border); transition: background .1s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: #f8fafc; }
+        tbody td   { padding: 11px 14px; font-size: 13px; vertical-align: middle; }
+
+        .c-name        { font-weight: 500; max-width: 220px; }
+        .c-name span   { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .c-dir, .c-date { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+        .c-dir         { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .c-size        { white-space: nowrap; color: var(--text-muted); }
+        .c-tags        { min-width: 120px; }
+        .c-tags .tags  { display: flex; flex-wrap: wrap; gap: 4px; }
+        .c-actions .acts { display: flex; gap: 6px; }
+
+        /* ── Empty state ─────────────────────────────────────────────────── */
+        #empty-state {
+            padding: 52px 20px; text-align: center; color: var(--text-muted); display: none;
+        }
+        #empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+
+        /* ── Pagination ──────────────────────────────────────────────────── */
+        #pagination {
+            display: none; align-items: center; justify-content: space-between;
+            padding: 11px 20px; border-top: 1px solid var(--border); background: #f8fafc;
+        }
+        #pagination .info { font-size: 12px; color: var(--text-muted); }
+        #pagination .pages { display: flex; gap: 4px; }
+        .pg {
+            min-width: 28px; height: 28px; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); background: var(--surface); cursor: pointer;
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            color: var(--text); transition: all .15s; padding: 0 6px;
+        }
+        .pg:hover:not([disabled])  { background: var(--bg); }
+        .pg.active                  { background: var(--primary); color: #fff; border-color: var(--primary); cursor: default; }
+        .pg[disabled]               { opacity: .35; cursor: not-allowed; }
+        .pg-dots                    { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-muted); }
+
+        /* ── Toasts ──────────────────────────────────────────────────────── */
+        #toasts {
+            position: fixed; bottom: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 8px; z-index: 999;
+        }
+        .toast {
+            padding: 11px 16px; border-radius: var(--radius); color: #fff;
+            font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,.2);
+            animation: toastIn .2s ease; max-width: 320px;
+        }
+        .toast.success { background: var(--success); }
+        .toast.error   { background: var(--danger-dk); }
+        .toast.info    { background: var(--primary-dk); }
+        @keyframes toastIn {
+            from { transform: translateX(110%); opacity: 0; }
+            to   { transform: translateX(0);   opacity: 1; }
+        }
+
+        /* ── Confirm dialog ──────────────────────────────────────────────── */
+        .overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.4);
+            display: flex; align-items: center; justify-content: center; z-index: 998;
+        }
+        .dlg {
+            background: var(--surface); border-radius: var(--radius);
+            padding: 24px; width: 360px; box-shadow: 0 20px 40px rgba(0,0,0,.2);
+        }
+        .dlg h3  { margin-bottom: 8px; font-size: 15px; }
+        .dlg p   { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+        .dlg-row { display: flex; gap: 8px; justify-content: flex-end; }
+
+        /* ── Responsive ──────────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            #search-bar { grid-template-columns: 1fr 1fr; }
+            .cols-2 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <span style="font-size:20px">🗂</span>
+    <h1>FileShare</h1>
+    <span class="badge">AES-256-GCM</span>
+    <span class="stats" id="hdr-stats">Loading…</span>
+</header>
+
+<main>
+
+    <!-- Upload ─────────────────────────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header"><h2>Upload</h2></div>
+        <div class="card-body">
+
+            <div id="drop-zone">
+                <div class="icon">📁</div>
+                <p><strong>Drop files here</strong> or click to browse</p>
+                <small>Encrypted with AES-256-GCM before hitting disk</small>
+            </div>
+            <input type="file" id="file-hidden" multiple style="display:none">
+            <div id="selected-files"></div>
+
+            <div class="form-grid cols-2" style="margin-bottom:14px">
+                <div>
+                    <label>Virtual directory (optional)</label>
+                    <input type="text" id="dir-input" placeholder="/documents/2024">
+                </div>
+            </div>
+
+            <label>Tags</label>
+            <div id="pending-tags"></div>
+            <div id="tag-row">
+                <div><input type="text" id="tag-key"   placeholder="key"></div>
+                <div><input type="text" id="tag-val"   placeholder="value"></div>
+                <button class="btn btn-ghost btn-sm" id="add-tag-btn">+ Add tag</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; margin-top:18px">
+                <button class="btn btn-primary" id="upload-btn" disabled>Upload</button>
+                <span id="upload-status"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Files ──────────────────────────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header"><h2>Files</h2></div>
+
+        <div id="search-bar">
+            <div>
+                <label>Search name</label>
+                <input type="text" id="sq" placeholder="report.pdf…">
+            </div>
+            <div>
+                <label>Directory</label>
+                <input type="text" id="sd" placeholder="/documents">
+            </div>
+            <div>
+                <label>From</label>
+                <input type="date" id="sf">
+            </div>
+            <div>
+                <label>To</label>
+                <input type="date" id="st">
+            </div>
+            <div>
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="search-btn">Search</button>
+            </div>
+            <div>
+                <label>&nbsp;</label>
+                <button class="btn btn-ghost" id="clear-btn">Clear</button>
+            </div>
+        </div>
+
+        <div class="tbl-wrap">
+            <table id="tbl">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Directory</th>
+                        <th>Size</th>
+                        <th>Uploaded</th>
+                        <th>Tags</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+
+        <div id="empty-state">
+            <div class="icon">📭</div>
+            <p>No files found</p>
+        </div>
+
+        <div id="pagination">
+            <span class="info" id="pg-info"></span>
+            <div class="pages" id="pg-btns"></div>
+        </div>
+    </div>
+
+</main>
+
+<div id="toasts"></div>
+
+<script>
+'use strict';
+
+const API = '/api/v1/files';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const S = {
+    page:      0,
+    size:      20,
+    total:     0,
+    pages:     0,
+    searching: false,
+    criteria:  null,
+    files:     [],          // current page cache for actions
+    pending:   [],          // files queued for upload
+    tags:      new Map(),   // pending upload tags
+};
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+async function req(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || `HTTP ${r.status}`);
+    }
+    return r.status === 204 ? null : r.json();
+}
+
+const api = {
+    list:     (p)     => req(`${API}?page=${p}&size=${S.size}`),
+    search:   (c, p)  => {
+        const ps = new URLSearchParams({ page: p, size: S.size });
+        if (c.q)    ps.set('q', c.q);
+        if (c.dir)  ps.set('directory', c.dir);
+        if (c.from) ps.set('from', c.from + 'T00:00:00Z');
+        if (c.to)   ps.set('to',   c.to   + 'T23:59:59Z');
+        return req(`${API}/search?${ps}`);
+    },
+    upload: (file, dir, tags) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        if (dir) fd.append('directory', dir);
+        for (const [k, v] of tags) fd.append('tag.' + k, v);
+        return req(API, { method: 'POST', body: fd });
+    },
+    delete: (id) => req(`${API}/${id}`, { method: 'DELETE' }),
+    download: async (id, name) => {
+        const r = await fetch(`${API}/${id}/download`);
+        if (!r.ok) throw new Error('Download failed');
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        Object.assign(document.createElement('a'), { href: url, download: name }).click();
+        URL.revokeObjectURL(url);
+    },
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function fmtSize(b) {
+    if (b < 1024)           return b + ' B';
+    if (b < 1_048_576)      return (b / 1024).toFixed(1) + ' KB';
+    if (b < 1_073_741_824)  return (b / 1_048_576).toFixed(1) + ' MB';
+    return (b / 1_073_741_824).toFixed(2) + ' GB';
+}
+
+function fmtDate(iso) {
+    return new Date(iso).toLocaleString(undefined,
+        { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function esc(s) {
+    return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toast(msg, type = 'info') {
+    const el = Object.assign(document.createElement('div'), { className: `toast ${type}`, textContent: msg });
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 3600);
+}
+
+function confirmDlg(title, body) {
+    return new Promise(resolve => {
+        const ov = document.createElement('div');
+        ov.className = 'overlay';
+        ov.innerHTML = `<div class="dlg"><h3>${esc(title)}</h3><p>${esc(body)}</p>
+          <div class="dlg-row">
+            <button class="btn btn-ghost" id="dc">Cancel</button>
+            <button class="btn btn-danger" id="dk">Delete</button>
+          </div></div>`;
+        document.body.appendChild(ov);
+        const done = v => { ov.remove(); resolve(v); };
+        ov.querySelector('#dc').onclick = () => done(false);
+        ov.querySelector('#dk').onclick = () => done(true);
+        ov.addEventListener('click', e => { if (e.target === ov) done(false); });
+    });
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function tagsHtml(tags) {
+    if (!tags || !Object.keys(tags).length)
+        return '<span style="color:var(--text-muted);font-size:11px">—</span>';
+    return `<div class="tags">${Object.entries(tags)
+        .map(([k,v]) => `<span class="tag-chip">${esc(k)}: ${esc(v)}</span>`).join('')}</div>`;
+}
+
+function render(data) {
+    S.total = data.totalElements;
+    S.pages = data.totalPages;
+    S.files = data.content;
+
+    const tbody  = document.getElementById('tbody');
+    const tbl    = document.getElementById('tbl');
+    const empty  = document.getElementById('empty-state');
+    const pgDiv  = document.getElementById('pagination');
+
+    if (!data.content.length) {
+        tbody.innerHTML = '';
+        tbl.style.display   = 'none';
+        empty.style.display = 'block';
+        pgDiv.style.display = 'none';
+        document.getElementById('hdr-stats').textContent = '0 files';
+        return;
+    }
+
+    tbl.style.display   = '';
+    empty.style.display = 'none';
+
+    tbody.innerHTML = data.content.map((f, i) => `
+        <tr>
+          <td class="c-name"><span title="${esc(f.originalName)}">${esc(f.originalName)}</span></td>
+          <td class="c-dir">${f.virtualDirectory ? esc(f.virtualDirectory) : '—'}</td>
+          <td class="c-size">${fmtSize(f.sizeBytes)}</td>
+          <td class="c-date">${fmtDate(f.uploadedAt)}</td>
+          <td class="c-tags">${tagsHtml(f.tags)}</td>
+          <td class="c-actions">
+            <div class="acts">
+              <button class="btn btn-ghost btn-sm" data-action="dl" data-idx="${i}">⬇ Download</button>
+              <button class="btn btn-danger btn-sm" data-action="del" data-idx="${i}">🗑</button>
+            </div>
+          </td>
+        </tr>`).join('');
+
+    renderPagination(data);
+    const n = data.totalElements;
+    document.getElementById('hdr-stats').textContent =
+        `${n.toLocaleString()} file${n !== 1 ? 's' : ''}`;
+}
+
+function renderPagination(data) {
+    const pgDiv = document.getElementById('pagination');
+    const info  = document.getElementById('pg-info');
+    const btns  = document.getElementById('pg-btns');
+
+    if (data.totalPages <= 1) { pgDiv.style.display = 'none'; return; }
+    pgDiv.style.display = 'flex';
+
+    const start = data.page * data.size + 1;
+    const end   = Math.min(start + data.content.length - 1, data.totalElements);
+    info.textContent = `${start}–${end} of ${data.totalElements.toLocaleString()}`;
+
+    const cur = data.page, tot = data.totalPages;
+    const pages = [];
+    for (let i = 0; i < tot; i++) {
+        if (i === 0 || i === tot-1 || Math.abs(i-cur) <= 1) pages.push(i);
+        else if (pages.at(-1) !== '…') pages.push('…');
+    }
+
+    btns.innerHTML =
+        `<button class="pg" data-pg="${cur-1}" ${cur === 0 ? 'disabled' : ''}>‹</button>` +
+        pages.map(p => p === '…'
+            ? `<span class="pg-dots">…</span>`
+            : `<button class="pg ${p === cur ? 'active' : ''}" data-pg="${p}">${p+1}</button>`
+        ).join('') +
+        `<button class="pg" data-pg="${cur+1}" ${cur >= tot-1 ? 'disabled' : ''}>›</button>`;
+}
+
+// ─── Load ─────────────────────────────────────────────────────────────────────
+async function load() {
+    try {
+        const data = S.searching
+            ? await api.search(S.criteria, S.page)
+            : await api.list(S.page);
+        render(data);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── Actions (delegated) ──────────────────────────────────────────────────────
+document.getElementById('tbody').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const f = S.files[+btn.dataset.idx];
+    if (!f) return;
+
+    if (btn.dataset.action === 'dl') {
+        try {
+            toast(`Decrypting "${f.originalName}"…`, 'info');
+            await api.download(f.id, f.originalName);
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    if (btn.dataset.action === 'del') {
+        const ok = await confirmDlg('Delete file', `Permanently delete "${f.originalName}"? This cannot be undone.`);
+        if (!ok) return;
+        try {
+            await api.delete(f.id);
+            toast(`"${f.originalName}" deleted`, 'success');
+            if (S.page > 0 && S.total - 1 <= S.page * S.size) S.page--;
+            await load();
+        } catch (err) { toast(err.message, 'error'); }
+    }
+});
+
+document.getElementById('pg-btns').addEventListener('click', async e => {
+    const btn = e.target.closest('.pg:not([disabled]):not(.active)');
+    if (!btn || btn.dataset.pg === undefined) return;
+    S.page = +btn.dataset.pg;
+    await load();
+});
+
+// ─── Upload ───────────────────────────────────────────────────────────────────
+(function () {
+    const zone    = document.getElementById('drop-zone');
+    const hidden  = document.getElementById('file-hidden');
+    const selDiv  = document.getElementById('selected-files');
+    const tagsPre = document.getElementById('pending-tags');
+    const upBtn   = document.getElementById('upload-btn');
+    const status  = document.getElementById('upload-status');
+
+    function refreshFiles() {
+        selDiv.innerHTML = S.pending.map(f =>
+            `<span class="file-chip">📄 ${esc(f.name)} <small>(${fmtSize(f.size)})</small></span>`
+        ).join('');
+        upBtn.disabled = !S.pending.length;
+    }
+
+    function refreshTags() {
+        tagsPre.innerHTML = [...S.tags.entries()].map(([k,v]) =>
+            `<span class="tag-chip">${esc(k)}: ${esc(v)} <span class="x" data-k="${esc(k)}">×</span></span>`
+        ).join('');
+    }
+
+    tagsPre.addEventListener('click', e => {
+        const x = e.target.closest('.x');
+        if (!x) return;
+        S.tags.delete(x.dataset.k);
+        refreshTags();
+    });
+
+    zone.addEventListener('click',     () => hidden.click());
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('over');
+        S.pending = [...e.dataTransfer.files]; refreshFiles();
+    });
+    hidden.addEventListener('change', () => { S.pending = [...hidden.files]; refreshFiles(); });
+
+    document.getElementById('add-tag-btn').addEventListener('click', () => {
+        const k = document.getElementById('tag-key').value.trim();
+        const v = document.getElementById('tag-val').value.trim();
+        if (!k) return document.getElementById('tag-key').focus();
+        S.tags.set(k, v);
+        document.getElementById('tag-key').value = '';
+        document.getElementById('tag-val').value = '';
+        refreshTags();
+    });
+    document.getElementById('tag-val').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('add-tag-btn').click();
+    });
+
+    upBtn.addEventListener('click', async () => {
+        if (!S.pending.length) return;
+        const dir = document.getElementById('dir-input').value.trim();
+        upBtn.disabled = true;
+        let ok = 0, fail = 0;
+
+        for (const file of S.pending) {
+            status.innerHTML = `<span class="spinner"></span> Uploading ${esc(file.name)}…`;
+            try   { await api.upload(file, dir, S.tags); ok++; }
+            catch (e) { fail++; toast(`"${file.name}": ${e.message}`, 'error'); }
+        }
+
+        status.innerHTML = '';
+        if (ok) toast(`${ok} file${ok > 1 ? 's' : ''} uploaded`, 'success');
+
+        S.pending = []; S.tags.clear();
+        document.getElementById('dir-input').value = '';
+        hidden.value = '';
+        refreshFiles(); refreshTags();
+        S.page = 0; S.searching = false; S.criteria = null;
+        await load();
+    });
+})();
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+(function () {
+    async function doSearch() {
+        const q   = document.getElementById('sq').value.trim();
+        const dir = document.getElementById('sd').value.trim();
+        const frm = document.getElementById('sf').value;
+        const to  = document.getElementById('st').value;
+        if (q || dir || frm || to) {
+            S.searching = true;
+            S.criteria  = { q: q||null, dir: dir||null, from: frm||null, to: to||null };
+        } else {
+            S.searching = false; S.criteria = null;
+        }
+        S.page = 0;
+        await load();
+    }
+
+    document.getElementById('search-btn').addEventListener('click', doSearch);
+    document.getElementById('sq').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+    document.getElementById('clear-btn').addEventListener('click', async () => {
+        ['sq','sd','sf','st'].forEach(id => document.getElementById(id).value = '');
+        S.searching = false; S.criteria = null; S.page = 0;
+        await load();
+    });
+})();
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+load();
+</script>
+</body>
+</html>

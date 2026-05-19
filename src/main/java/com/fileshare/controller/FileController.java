@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -46,18 +47,18 @@ public class FileController {
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<byte[]> download(@PathVariable UUID id) throws IOException {
-        var info  = fileService.getMetadata(id);
-        var bytes = fileService.download(id);
+    public ResponseEntity<StreamingResponseBody> download(@PathVariable UUID id) {
+        var info = fileService.getMetadata(id);
+        StreamingResponseBody body = out -> fileService.download(id, out);
 
         var headers = new HttpHeaders();
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename(info.originalName())
                 .build());
         headers.setContentType(MediaType.parseMediaType(info.contentType()));
-        headers.setContentLength(bytes.length);
+        headers.setContentLength(info.sizeBytes());
 
-        return ResponseEntity.ok().headers(headers).body(bytes);
+        return ResponseEntity.ok().headers(headers).body(body);
     }
 
     @GetMapping("/{id}")
@@ -76,7 +77,7 @@ public class FileController {
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "uploadedAt"));
+        var pageable = PageRequest.of(page, Math.min(size, 50), Sort.by(Sort.Direction.DESC, "uploadedAt"));
         return fileService.listFiles(pageable);
     }
 
@@ -105,7 +106,7 @@ public class FileController {
                 to   != null ? Instant.parse(to)   : null
         );
 
-        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "uploadedAt"));
+        var pageable = PageRequest.of(page, Math.min(size, 50), Sort.by(Sort.Direction.DESC, "uploadedAt"));
         return fileService.search(criteria, pageable);
     }
 

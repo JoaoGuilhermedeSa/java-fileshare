@@ -16,65 +16,74 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.fasterxml.uuid.impl.TimeBasedEpochGenerator;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.nio.file.Path;
 
 @Service
 @Transactional(readOnly = true)
 public class FileService {
 
-    private final FileMetadataRepository repository;
-    private final EncryptionService      encryptionService;
-    private final FileStorage            fileStorage;
+    private final FileMetadataRepository  repository;
+    private final EncryptionService       encryptionService;
+    private final FileStorage             fileStorage;
     private final TimeBasedEpochGenerator uuidGenerator;
 
     public FileService(FileMetadataRepository repository,
                        EncryptionService encryptionService,
                        FileStorage fileStorage,
                        TimeBasedEpochGenerator uuidGenerator) {
-        this.repository    = repository;
+        this.repository        = repository;
         this.encryptionService = encryptionService;
-        this.fileStorage   = fileStorage;
-        this.uuidGenerator = uuidGenerator;
+        this.fileStorage       = fileStorage;
+        this.uuidGenerator     = uuidGenerator;
     }
 
     @Transactional
     public FileInfoDto upload(MultipartFile file,
                               String virtualDirectory,
                               Map<String, String> tags) throws IOException {
-        var plaintext = file.getBytes();
-        var checksum  = sha256Hex(plaintext);
-        var encrypted = encryptionService.encrypt(plaintext);
+        var id     = uuidGenerator.generate();
+        var digest = sha256();
+        var ivRef  = new String[1];
 
-        var id = uuidGenerator.generate();
-        var storedPath = fileStorage.store(id, encrypted);
+        try (var raw      = file.getInputStream();
+             var digestIn = new DigestInputStream(raw, digest)) {
 
-        var metadata = new FileMetadata();
-        metadata.setId(id);
-        metadata.setOriginalName(sanitizeFilename(file.getOriginalFilename()));
-        metadata.setStoredPath(storedPath);
-        metadata.setVirtualDirectory(normalizeDirectory(virtualDirectory));
-        metadata.setContentType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");
-        metadata.setSizeBytes(plaintext.length);
-        metadata.setChecksum(checksum);
-        metadata.setEncryptionIv(encryptionService.extractIvHex(encrypted));
-        metadata.setUploadedAt(Instant.now());
-        metadata.setLastModifiedAt(Instant.now());
-        metadata.setTags(buildTags(tags, metadata));
+            var storedPath = fileStorage.store(id, out ->
+                    ivRef[0] = encryptionService.encryptStream(digestIn, out));
 
-        return FileInfoDto.from(repository.save(metadata));
+            var metadata = new FileMetadata();
+            metadata.setId(id);
+            metadata.setOriginalName(sanitizeFilename(file.getOriginalFilename()));
+            metadata.setStoredPath(storedPath);
+            metadata.setVirtualDirectory(normalizeDirectory(virtualDirectory));
+            metadata.setContentType(file.getContentType() != null
+                    ? file.getContentType() : "application/octet-stream");
+            metadata.setSizeBytes(file.getSize());
+            metadata.setChecksum(HexFormat.of().formatHex(digest.digest()));
+            metadata.setEncryptionIv(ivRef[0]);
+            metadata.setUploadedAt(Instant.now());
+            metadata.setLastModifiedAt(Instant.now());
+            metadata.setTags(buildTags(tags, metadata));
+
+            return FileInfoDto.from(repository.save(metadata));
+        }
     }
 
-    public byte[] download(UUID id) throws IOException {
-        var metadata  = findOrThrow(id);
-        var encrypted = fileStorage.retrieve(metadata.getStoredPath());
-        return encryptionService.decrypt(encrypted);
+    public void download(UUID id, OutputStream out) throws IOException {
+        var metadata = findOrThrow(id);
+        try (var encryptedStream = fileStorage.retrieve(metadata.getStoredPath())) {
+            encryptionService.decryptStream(encryptedStream, out);
+        }
     }
 
     @Transactional
@@ -123,15 +132,6 @@ public class FileService {
         }).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
     }
 
-    private String sha256Hex(byte[] data) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(data));
-        } catch (Exception e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
-    }
-
     private String sanitizeFilename(String name) {
         if (name == null) return "unnamed";
         return Path.of(name).getFileName().toString();
@@ -141,5 +141,13 @@ public class FileService {
         if (dir == null || dir.isBlank()) return null;
         var normalized = dir.trim();
         return normalized.startsWith("/") ? normalized : "/" + normalized;
+    }
+
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }
